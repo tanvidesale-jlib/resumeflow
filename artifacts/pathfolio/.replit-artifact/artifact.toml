@@ -1,0 +1,28 @@
+kind = "web"
+previewPath = "/"
+title = "ResumeFlow"
+description = "A personal resume workspace that helps students and early-career professionals shape their experience into a clear, memorable story with a live preview and export-ready layouts."
+version = "1.0.0"
+id = "artifacts/pathfolio"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 25978
+
+[services.development]
+run = "pnpm --filter @workspace/pathfolio run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/pathfolio", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/pathfolio/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "25978"
+BASE_PATH = "/"
