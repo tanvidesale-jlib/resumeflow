@@ -1,0 +1,171 @@
+openapi: 3.1.0
+info:
+  # Do not change the title, if the title changes, the import paths will be broken
+  title: Api
+  version: 0.1.0
+  description: Resume Builder API
+servers:
+  - url: /api
+    description: Base API path
+tags:
+  - name: health
+    description: Health operations
+  - name: resume
+    description: Resume builder operations
+paths:
+  /healthz:
+    get:
+      operationId: healthCheck
+      tags: [health]
+      summary: Health check
+      description: Returns server health status
+      responses:
+        "200":
+          description: Healthy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthStatus"
+  /resume:
+    get:
+      operationId: getResume
+      tags: [resume]
+      summary: Get the current resume
+      responses:
+        "200":
+          description: Current resume
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Resume"
+    put:
+      operationId: saveResume
+      tags: [resume]
+      summary: Save the current resume
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ResumeInput"
+      responses:
+        "200":
+          description: Saved resume
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Resume"
+  /resume/summary:
+    get:
+      operationId: getResumeSummary
+      tags: [resume]
+      summary: Get resume completion summary
+      responses:
+        "200":
+          description: Completion summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ResumeSummary"
+components:
+  schemas:
+    HealthStatus:
+      type: object
+      properties:
+        status:
+          type: string
+      required:
+        - status
+    Resume:
+      type: object
+      required: [id, data, updatedAt]
+      properties:
+        id:
+          type: number
+        data:
+          $ref: "#/components/schemas/ResumeInput"
+        updatedAt:
+          type: string
+          format: date-time
+    ResumeInput:
+      type: object
+      required: [basics, experience, education, skills, projects]
+      properties:
+        basics:
+          $ref: "#/components/schemas/ResumeBasics"
+        experience:
+          type: array
+          items:
+            $ref: "#/components/schemas/Experience"
+        education:
+          type: array
+          items:
+            $ref: "#/components/schemas/Education"
+        skills:
+          type: array
+          items:
+            $ref: "#/components/schemas/Skill"
+        projects:
+          type: array
+          items:
+            $ref: "#/components/schemas/Project"
+    ResumeBasics:
+      type: object
+      required: [name, headline, email, phone, location, summary, website]
+      properties:
+        name: { type: string }
+        headline: { type: string }
+        email: { type: string }
+        phone: { type: string }
+        location: { type: string }
+        summary: { type: string }
+        website: { type: string }
+    Experience:
+      type: object
+      required: [id, role, company, location, startDate, endDate, description]
+      properties:
+        id: { type: string }
+        role: { type: string }
+        company: { type: string }
+        location: { type: string }
+        startDate: { type: string }
+        endDate: { type: string }
+        description: { type: string }
+    Education:
+      type: object
+      required: [id, school, degree, location, startDate, endDate]
+      properties:
+        id: { type: string }
+        school: { type: string }
+        degree: { type: string }
+        location: { type: string }
+        startDate: { type: string }
+        endDate: { type: string }
+    Skill:
+      type: object
+      required: [id, name, level]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        level: { type: string, enum: [beginner, intermediate, advanced, expert] }
+    Project:
+      type: object
+      required: [id, name, description, link, technologies]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        description: { type: string }
+        link: { type: string }
+        technologies:
+          type: array
+          items: { type: string }
+    ResumeSummary:
+      type: object
+      required: [completion, completedSections, totalSections, lastSaved]
+      properties:
+        completion: { type: number }
+        completedSections: { type: number }
+        totalSections: { type: number }
+        lastSaved:
+          type: string
+          format: date-time
