@@ -1,4 +1,234 @@
-ter base={basePath}>
+import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { QueryClient, QueryClientProvider, useQueryClient } from '@tanstack/react-query';
+import {
+  ClerkProvider,
+  RedirectToSignIn,
+  Show,
+  SignIn,
+  SignUp,
+  useAuth,
+  useClerk,
+  useUser,
+} from '@clerk/react';
+import { publishableKeyFromHost } from '@clerk/react/internal';
+import { shadcn } from '@clerk/themes';
+import {
+  ArrowRight,
+  BriefcaseBusiness,
+  Check,
+  ChevronDown,
+  ChevronRight,
+  CircleHelp,
+  Download,
+  FileText,
+  GraduationCap,
+  LayoutTemplate,
+  LoaderCircle,
+  LockKeyhole,
+  Menu,
+  Palette,
+  PencilLine,
+  Plus,
+  Printer,
+  RefreshCw,
+  Save,
+  Settings as SettingsIcon,
+  Sparkles,
+  Trash2,
+  UserRound,
+  WandSparkles,
+  X,
+} from 'lucide-react';
+import {
+  getGetResumeQueryKey,
+  getGetResumeSummaryQueryKey,
+  useGetResume,
+  useGetResumeSummary,
+  useSaveResume,
+  type Education,
+  type Experience,
+  type Project,
+  type ResumeBasics,
+  type ResumeInput,
+  type Skill,
+} from '@workspace/api-client-react';
+import { ErrorBoundary } from '@/components/error-boundary';
+import { Toaster } from '@/components/ui/toaster';
+import { TooltipProvider } from '@/components/ui/tooltip';
+import { Link, Redirect, Route, Router as WouterRouter, Switch, useLocation } from 'wouter';
+import './index.css';
+
+const queryClient = new QueryClient();
+const clerkPubKey = publishableKeyFromHost(
+  window.location.hostname,
+  import.meta.env.VITE_CLERK_PUBLISHABLE_KEY,
+);
+const clerkProxyUrl = import.meta.env.VITE_CLERK_PROXY_URL;
+const basePath = import.meta.env.BASE_URL.replace(/\/$/, '');
+
+function stripBase(path: string) {
+  return basePath && path.startsWith(basePath) ? path.slice(basePath.length) || '/' : path;
+}
+
+const clerkAppearance = {
+  theme: shadcn,
+  cssLayerName: 'clerk',
+  options: {
+    logoPlacement: 'inside' as const,
+    logoLinkUrl: basePath || '/',
+    logoImageUrl: `${window.location.origin}${basePath}/logo.svg`,
+  },
+  variables: {
+    colorPrimary: '#247c73',
+    colorForeground: '#27373a',
+    colorMutedForeground: '#687772',
+    colorDanger: '#b6463c',
+    colorBackground: '#fcfaf4',
+    colorInput: '#f5f1e8',
+    colorInputForeground: '#27373a',
+    colorNeutral: '#d8d0c1',
+    fontFamily: 'DM Sans, sans-serif',
+    borderRadius: '0.8rem',
+  },
+  elements: {
+    rootBox: 'w-full flex justify-center',
+    cardBox: 'bg-[#fcfaf4] rounded-[26px] w-[440px] max-w-full overflow-hidden border border-[#e5ded0]',
+    card: '!shadow-none !border-0 !bg-transparent !rounded-none',
+    footer: '!shadow-none !border-0 !bg-transparent !rounded-none',
+    headerTitle: 'text-[#27373a] font-semibold',
+    headerSubtitle: 'text-[#687772]',
+    socialButtonsBlockButtonText: 'text-[#27373a]',
+    formFieldLabel: 'text-[#27373a]',
+    footerActionLink: 'text-[#247c73] font-semibold',
+    footerActionText: 'text-[#687772]',
+    dividerText: 'text-[#687772]',
+    identityPreviewEditButton: 'text-[#247c73]',
+    formFieldSuccessText: 'text-[#247c73]',
+    alertText: 'text-[#b6463c]',
+    logoBox: 'rounded-xl',
+    logoImage: 'rounded-xl',
+    socialButtonsBlockButton: 'border-[#d8d0c1] bg-[#f5f1e8] hover:bg-[#eee8dc]',
+    formButtonPrimary: 'bg-[#247c73] hover:bg-[#1d665f] text-[#fcfaf4]',
+    formFieldInput: 'border-[#d8d0c1] bg-[#f5f1e8] text-[#27373a]',
+    footerAction: 'border-t border-[#e5ded0]',
+    dividerLine: 'bg-[#e5ded0]',
+    alert: 'border-[#e1b9b2] bg-[#fbefec]',
+    otpCodeFieldInput: 'border-[#d8d0c1] bg-[#f5f1e8] text-[#27373a]',
+    formFieldRow: 'gap-2',
+    main: 'px-2',
+  },
+};
+
+type TemplateName = 'editorial' | 'folio' | 'signal';
+type AccentName = 'teal' | 'coral' | 'ochre' | 'ink';
+
+const accents: Record<AccentName, { label: string; value: string; soft: string }> = {
+  teal: { label: 'Sea glass', value: '#247c73', soft: '#dcece6' },
+  coral: { label: 'Terracotta', value: '#c76152', soft: '#f3dfd6' },
+  ochre: { label: 'Golden hour', value: '#a8732e', soft: '#f1e6c9' },
+  ink: { label: 'Deep ink', value: '#315568', soft: '#dce7eb' },
+};
+
+const templateDetails: Record<TemplateName, { name: string; eyebrow: string; description: string }> = {
+  editorial: {
+    name: 'Editorial',
+    eyebrow: 'The thoughtful classic',
+    description: 'A generous, literary layout with a strong opening and an easy reading rhythm.',
+  },
+  folio: {
+    name: 'Margin',
+    eyebrow: 'The quiet specialist',
+    description: 'A compact, considered format that lets your work speak with calm authority.',
+  },
+  signal: {
+    name: 'Signal',
+    eyebrow: 'The confident modern',
+    description: 'A clear hierarchy and crisp details for roles where clarity is a superpower.',
+  },
+};
+
+const sampleResume: ResumeInput = {
+  basics: {
+    name: 'Mara Chen',
+    headline: 'Product designer shaping useful, human software',
+    email: 'mara.chen@email.com',
+    phone: '+1 415 555 0188',
+    location: 'San Francisco, CA',
+    summary:
+      'Product designer with 7 years of experience turning complex systems into clear, trusted tools. I work across research, interaction, and visual design to help teams make meaningful things feel inevitable.',
+    website: 'marachen.design',
+  },
+  experience: [
+    {
+      id: 'experience-1',
+      role: 'Senior Product Designer',
+      company: 'Northstar Health',
+      location: 'San Francisco, CA',
+      startDate: '2021',
+      endDate: 'Present',
+      description:
+        'Led the redesign of a care coordination platform used by 12,000+ clinicians. Partnered with product and engineering to reduce task time by 34% and establish a scalable design system.',
+    },
+    {
+      id: 'experience-2',
+      role: 'Product Designer',
+      company: 'Kindred Studio',
+      location: 'Oakland, CA',
+      startDate: '2018',
+      endDate: '2021',
+      description:
+        'Designed digital products for mission-driven teams, from early product strategy through launch. Built research practice and mentored two emerging designers.',
+    },
+  ],
+  education: [
+    {
+      id: 'education-1',
+      school: 'California College of the Arts',
+      degree: 'BFA, Interaction Design',
+      location: 'San Francisco, CA',
+      startDate: '2014',
+      endDate: '2018',
+    },
+  ],
+  skills: [
+    { id: 'skill-1', name: 'Product strategy', level: 'expert' },
+    { id: 'skill-2', name: 'Interaction design', level: 'expert' },
+    { id: 'skill-3', name: 'Design systems', level: 'advanced' },
+    { id: 'skill-4', name: 'User research', level: 'advanced' },
+  ],
+  projects: [
+    {
+      id: 'project-1',
+      name: 'Care notes',
+      description: 'A calmer way for care teams to share context across a patient journey.',
+      link: 'marachen.design/care-notes',
+      technologies: ['Figma', 'Prototyping'],
+    },
+  ],
+};
+
+function makeId(prefix: string) {
+  return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+}
+
+function App() {
+  const [template, setTemplate] = useState<TemplateName>(() => (localStorage.getItem('resumeflow-template') as TemplateName) || 'editorial');
+  const [accent, setAccent] = useState<AccentName>(() => (localStorage.getItem('resumeflow-accent') as AccentName) || 'teal');
+  const [isDark, setIsDark] = useState(() => localStorage.getItem('resumeflow-night-reading') === 'true');
+
+  useEffect(() => {
+    document.documentElement.classList.toggle('dark', isDark);
+    localStorage.setItem('resumeflow-night-reading', String(isDark));
+  }, [isDark]);
+  useEffect(() => {
+    localStorage.setItem('resumeflow-template', template);
+  }, [template]);
+  useEffect(() => {
+    localStorage.setItem('resumeflow-accent', accent);
+  }, [accent]);
+
+  return (
+    <WouterRouter base={basePath}>
       <ClerkProviderWithRoutes template={template} accent={accent} setTemplate={setTemplate} setAccent={setAccent} isDark={isDark} setIsDark={setIsDark} />
     </WouterRouter>
   );
