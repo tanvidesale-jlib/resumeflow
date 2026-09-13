@@ -12,6 +12,7 @@ import router from "./routes";
 import { logger } from "./lib/logger";
 
 const app: Express = express();
+const frontendOrigin = process.env.FRONTEND_URL?.trim();
 
 app.use(
   pinoHttp({
@@ -33,7 +34,7 @@ app.use(
   }),
 );
 app.use(CLERK_PROXY_PATH, clerkProxyMiddleware());
-app.use(cors({ credentials: true, origin: true }));
+app.use(cors({ credentials: true, origin: frontendOrigin || true }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 if (process.env.CLERK_SECRET_KEY) {
