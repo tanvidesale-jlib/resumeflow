@@ -12,7 +12,16 @@ import router from "./routes";
 import { logger } from "./lib/logger";
 
 const app: Express = express();
-const frontendOrigin = process.env.FRONTEND_URL?.trim();
+const configuredFrontendUrl = process.env.FRONTEND_URL?.trim();
+const frontendOrigin = configuredFrontendUrl
+  ? (() => {
+      try {
+        return new URL(configuredFrontendUrl).origin;
+      } catch {
+        return configuredFrontendUrl.replace(/\/+$/, "");
+      }
+    })()
+  : undefined;
 
 app.use(
   pinoHttp({
