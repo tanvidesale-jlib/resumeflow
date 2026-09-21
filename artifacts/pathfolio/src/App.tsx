@@ -42,10 +42,10 @@ import {
 import {
   getGetResumeQueryKey,
   getGetResumeSummaryQueryKey,
-  setBaseUrl,
   useGetResume,
   useGetResumeSummary,
   useSaveResume,
+  setBaseUrl,
   type Education,
   type Experience,
   type Project,
@@ -64,11 +64,11 @@ const clerkPubKey = publishableKeyFromHost(
   window.location.hostname,
   import.meta.env.VITE_CLERK_PUBLISHABLE_KEY,
 );
-const apiUrl = import.meta.env.VITE_API_URL?.replace(/\/+$/, '') || '';
-setBaseUrl(apiUrl || null);
-const clerkProxyUrl =
-  import.meta.env.VITE_CLERK_PROXY_URL || (apiUrl ? `${apiUrl}/api/__clerk` : undefined);
+const clerkProxyUrl = import.meta.env.VITE_CLERK_PROXY_URL;
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, '');
+const apiBaseUrl = import.meta.env.VITE_API_URL?.trim() || '';
+
+setBaseUrl(apiBaseUrl || null);
 
 function stripBase(path: string) {
   return basePath && path.startsWith(basePath) ? path.slice(basePath.length) || '/' : path;
