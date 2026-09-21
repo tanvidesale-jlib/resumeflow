@@ -17,7 +17,7 @@ services:
           name: resumeflow-db
           property: connectionString
       - key: FRONTEND_URL
-        value: https://tanvidesale-jlib.github.io/resumeflow
+        value: https://tanvidesale-jlib.github.io
       - key: CLERK_PUBLISHABLE_KEY
         sync: false
       - key: CLERK_SECRET_KEY
