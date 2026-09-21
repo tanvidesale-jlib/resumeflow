@@ -40,12 +40,13 @@ import {
   X,
 } from 'lucide-react';
 import {
+  getHealthCheckQueryKey,
   getGetResumeQueryKey,
   getGetResumeSummaryQueryKey,
+  useHealthCheck,
   useGetResume,
   useGetResumeSummary,
   useSaveResume,
-  setBaseUrl,
   type Education,
   type Experience,
   type Project,
@@ -66,9 +67,6 @@ const clerkPubKey = publishableKeyFromHost(
 );
 const clerkProxyUrl = import.meta.env.VITE_CLERK_PROXY_URL;
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, '');
-const apiBaseUrl = import.meta.env.VITE_API_URL?.trim() || '';
-
-setBaseUrl(apiBaseUrl || null);
 
 function stripBase(path: string) {
   return basePath && path.startsWith(basePath) ? path.slice(basePath.length) || '/' : path;
@@ -455,6 +453,14 @@ function ValueStep({ number, title, copy }: { number: string; title: string; cop
 }
 
 function AppShell({ children, active, onMenu }: { children: ReactNode; active: string; onMenu?: () => void }) {
+  const healthQuery = useHealthCheck({
+    query: {
+      queryKey: getHealthCheckQueryKey(),
+      staleTime: 60_000,
+      retry: 1,
+    },
+  });
+
   return (
     <div className="grain min-h-[100dvh]">
       <header className="sticky top-0 z-30 border-b border-[hsl(var(--border))] bg-[hsl(var(--background)/.9)] px-5 py-4 backdrop-blur-md lg:px-8">
@@ -465,7 +471,22 @@ function AppShell({ children, active, onMenu }: { children: ReactNode; active: s
             <ShellLink href="/templates" label="Templates" icon={<LayoutTemplate size={15} />} active={active === 'templates'} />
             <ShellLink href="/settings" label="Preferences" icon={<SettingsIcon size={15} />} active={active === 'settings'} />
           </nav>
-          <div className="flex items-center gap-3 text-xs text-[hsl(var(--muted-foreground))]"><span className="hidden items-center gap-1.5 sm:flex"><LockKeyhole size={13} /> Private workspace</span><UserProfileMenu /></div>
+          <div className="flex items-center gap-3 text-xs text-[hsl(var(--muted-foreground))]">
+            <span className="hidden items-center gap-1.5 sm:flex" data-testid="status-private-workspace"><LockKeyhole size={13} /> Private workspace</span>
+            <span
+              className={`hidden items-center gap-1.5 rounded-full border px-2.5 py-1.5 font-mono-ui text-[9px] uppercase tracking-[.08em] sm:flex ${
+                healthQuery.isError
+                  ? 'border-[hsl(var(--accent)/.35)] bg-[hsl(var(--accent)/.08)] text-[hsl(var(--accent))]'
+                  : 'border-[hsl(var(--primary)/.2)] bg-[hsl(var(--primary)/.06)] text-[hsl(var(--primary))]'
+              }`}
+              title={healthQuery.isError ? 'Connection check could not reach the workspace' : 'Workspace connection is available'}
+              data-testid="status-workspace-connection"
+            >
+              <span className={`size-1.5 rounded-full ${healthQuery.isError ? 'bg-[hsl(var(--accent))]' : 'bg-[hsl(var(--primary))]'}`} />
+              {healthQuery.isError ? 'Offline' : 'Connected'}
+            </span>
+            <UserProfileMenu />
+          </div>
         </div>
       </header>
       {children}
@@ -497,6 +518,8 @@ function Builder({ template, accent, setTemplate, setAccent }: { template: Templ
   const [mobileOpen, setMobileOpen] = useState(false);
   const [savedAt, setSavedAt] = useState('');
   const [hydrated, setHydrated] = useState(false);
+  const compactEditor = localStorage.getItem('resumeflow-compact-editor') === 'true';
+  const showWritingPrompts = localStorage.getItem('resumeflow-writing-prompts') !== 'false';
 
   useEffect(() => {
     if (resumeQuery.data?.data && !hydrated) {
@@ -532,22 +555,22 @@ function Builder({ template, accent, setTemplate, setAccent }: { template: Templ
       {mobileOpen && <MobileMenu onClose={() => setMobileOpen(false)} />}
       <div className="mx-auto grid max-w-[1440px] lg:grid-cols-[220px_minmax(400px,1fr)_minmax(430px,1.05fr)]">
         <aside className="hidden min-h-[calc(100dvh-73px)] border-r border-[hsl(var(--border))] px-5 py-8 lg:block">
-           <div className="mb-8 px-3"><p className="font-mono-ui text-[10px] uppercase tracking-[.18em] text-[hsl(var(--accent))]">My resume</p><h2 className="mt-2 truncate font-display text-2xl">{resume.basics.name || 'Untitled resume'}</h2><p className="mt-1 text-xs text-[hsl(var(--muted-foreground))]">{savedAt ? `Saved ${savedAt}` : 'A draft worth shaping'}</p></div>
+           <div className="mb-8 px-3"><p className="font-mono-ui text-[10px] uppercase tracking-[.18em] text-[hsl(var(--accent))]">My resume</p><h2 className="mt-2 truncate font-display text-2xl">{resume.basics.name || 'Untitled resume'}</h2><p className="mt-1 text-xs text-[hsl(var(--muted-foreground))]">{savedAt ? `Saved ${savedAt}` : summaryQuery.data?.lastSaved ? `Last saved ${formatSavedDate(summaryQuery.data.lastSaved)}` : 'A draft worth shaping'}</p></div>
           <div className="mb-8 rounded-2xl bg-[hsl(var(--secondary)/.55)] p-4"><div className="flex items-end justify-between"><span className="text-xs font-semibold">Profile strength</span><span className="font-mono-ui text-sm text-[hsl(var(--primary))]">{completion}%</span></div><div className="mt-3 h-1.5 overflow-hidden rounded-full bg-[hsl(var(--border))]"><div className="h-full rounded-full bg-[hsl(var(--primary))] transition-all duration-500" style={{ width: `${completion}%` }} /></div><p className="mt-3 text-[11px] leading-4 text-[hsl(var(--muted-foreground))]">A few thoughtful details go a long way.</p></div>
           <div className="space-y-1"><SideSection icon={<UserRound size={16} />} label="Basics" active={activeSection === 'basics'} onClick={() => setActiveSection('basics')} /><SideSection icon={<BriefcaseBusiness size={16} />} label="Experience" count={resume.experience.length} active={activeSection === 'experience'} onClick={() => setActiveSection('experience')} /><SideSection icon={<GraduationCap size={16} />} label="Education" count={resume.education.length} active={activeSection === 'education'} onClick={() => setActiveSection('education')} /><SideSection icon={<Sparkles size={16} />} label="Skills" count={resume.skills.length} active={activeSection === 'skills'} onClick={() => setActiveSection('skills')} /><SideSection icon={<WandSparkles size={16} />} label="Projects" count={resume.projects.length} active={activeSection === 'projects'} onClick={() => setActiveSection('projects')} /></div>
           <div className="mt-10 border-t border-[hsl(var(--border))] pt-5"><Link href="/templates" className="flex items-center gap-2 px-3 py-2 text-xs font-semibold text-[hsl(var(--muted-foreground))] transition hover:text-[hsl(var(--primary))]" data-testid="link-sidebar-templates"><LayoutTemplate size={15} /> Change template <ChevronRight size={14} className="ml-auto" /></Link><Link href="/settings" className="flex items-center gap-2 px-3 py-2 text-xs font-semibold text-[hsl(var(--muted-foreground))] transition hover:text-[hsl(var(--primary))]" data-testid="link-sidebar-settings"><SettingsIcon size={15} /> Preferences <ChevronRight size={14} className="ml-auto" /></Link></div>
         </aside>
-        <main className="min-w-0 border-r border-[hsl(var(--border))] px-5 py-7 sm:px-8 lg:px-10 lg:py-9">
+         <main className={`min-w-0 border-r border-[hsl(var(--border))] px-5 sm:px-8 lg:px-10 ${compactEditor ? 'py-5 lg:py-6' : 'py-7 lg:py-9'}`}>
           <div className="mb-8 flex items-start justify-between"><div><p className="font-mono-ui text-[10px] uppercase tracking-[.16em] text-[hsl(var(--accent))]">Working draft</p><h1 className="mt-2 font-display text-4xl tracking-tight sm:text-5xl">Shape your story.</h1><p className="mt-2 text-sm text-[hsl(var(--muted-foreground))]">The good stuff is already in there. Let’s give it a home.</p></div><div className="hidden items-center gap-2 pt-2 sm:flex">{savedAt && <span className="text-xs text-[hsl(var(--muted-foreground))]" data-testid="status-saved">Saved {savedAt}</span>}<button onClick={save} disabled={saveResume.isPending} className="flex items-center gap-2 rounded-full border border-[hsl(var(--border))] bg-[hsl(var(--card))] px-4 py-2 text-xs font-bold transition hover:border-[hsl(var(--primary)/.45)] disabled:opacity-60" data-testid="button-save-resume">{saveResume.isPending ? <LoaderCircle size={14} className="animate-spin" /> : <Save size={14} />} {saveResume.isPending ? 'Saving' : 'Save'}</button></div></div>
           {resumeQuery.isLoading && <EditorSkeleton />}
           {resumeQuery.isError && <div className="mb-5 flex items-center gap-3 rounded-2xl border border-[hsl(var(--accent)/.3)] bg-[hsl(var(--accent)/.08)] p-4 text-sm" data-testid="status-resume-error"><CircleHelp size={17} className="text-[hsl(var(--accent))]" /><div><span className="font-semibold">Working offline with a fresh draft.</span><p className="mt-0.5 text-xs text-[hsl(var(--muted-foreground))]">We couldn’t reach your saved resume, but your edits are safe here until you save.</p></div><button onClick={() => resumeQuery.refetch()} className="ml-auto flex items-center gap-1 text-xs font-bold text-[hsl(var(--primary))]" data-testid="button-retry-resume"><RefreshCw size={13} /> Retry</button></div>}
            {saveResume.isError && <div className="mb-5 flex items-center gap-3 rounded-2xl border border-[hsl(var(--destructive)/.25)] bg-[hsl(var(--destructive)/.06)] p-4 text-sm" data-testid="status-save-error"><CircleHelp size={17} className="text-[hsl(var(--destructive))]" /><div><span className="font-semibold">That save did not land.</span><p className="mt-0.5 text-xs text-[hsl(var(--muted-foreground))]">Your draft is still here. Check your connection and try again.</p></div><button onClick={save} className="ml-auto flex items-center gap-1 text-xs font-bold text-[hsl(var(--primary))]" data-testid="button-retry-save"><RefreshCw size={13} /> Try again</button></div>}
-          <div className="space-y-3">
-            <EditorSection id="basics" title="Basics" caption="The first hello" icon={<UserRound size={17} />} active={activeSection} setActive={setActiveSection}><BasicsForm basics={resume.basics} update={updateBasics} /></EditorSection>
-            <EditorSection id="experience" title="Experience" caption="Where you made things happen" icon={<BriefcaseBusiness size={17} />} active={activeSection} setActive={setActiveSection} action={<AddButton onClick={addExperience} label="Add role" testId="button-add-experience" />}><ExperienceForm items={resume.experience} update={updateExperience} remove={(id) => setResume((p) => ({ ...p, experience: p.experience.filter((item) => item.id !== id) }))} /></EditorSection>
-            <EditorSection id="education" title="Education" caption="The foundations" icon={<GraduationCap size={17} />} active={activeSection} setActive={setActiveSection} action={<AddButton onClick={addEducation} label="Add school" testId="button-add-education" />}><EducationForm items={resume.education} update={updateEducation} remove={(id) => setResume((p) => ({ ...p, education: p.education.filter((item) => item.id !== id) }))} /></EditorSection>
-            <EditorSection id="skills" title="Skills" caption="What you bring to the room" icon={<Sparkles size={17} />} active={activeSection} setActive={setActiveSection} action={<AddButton onClick={addSkill} label="Add skill" testId="button-add-skill" />}><SkillsForm items={resume.skills} update={updateSkill} remove={(id) => setResume((p) => ({ ...p, skills: p.skills.filter((item) => item.id !== id) }))} /></EditorSection>
-            <EditorSection id="projects" title="Projects" caption="The work that stays with you" icon={<WandSparkles size={17} />} active={activeSection} setActive={setActiveSection} action={<AddButton onClick={addProject} label="Add project" testId="button-add-project" />}><ProjectsForm items={resume.projects} update={updateProject} remove={(id) => setResume((p) => ({ ...p, projects: p.projects.filter((item) => item.id !== id) }))} /></EditorSection>
+           <div className={compactEditor ? 'space-y-1.5' : 'space-y-3'}>
+             <EditorSection id="basics" title="Basics" caption={showWritingPrompts ? 'The first hello' : ''} icon={<UserRound size={17} />} active={activeSection} setActive={setActiveSection}><BasicsForm basics={resume.basics} update={updateBasics} /></EditorSection>
+             <EditorSection id="experience" title="Experience" caption={showWritingPrompts ? 'Where you made things happen' : ''} icon={<BriefcaseBusiness size={17} />} active={activeSection} setActive={setActiveSection} action={<AddButton onClick={addExperience} label="Add role" testId="button-add-experience" />}><ExperienceForm items={resume.experience} update={updateExperience} remove={(id) => setResume((p) => ({ ...p, experience: p.experience.filter((item) => item.id !== id) }))} /></EditorSection>
+             <EditorSection id="education" title="Education" caption={showWritingPrompts ? 'The foundations' : ''} icon={<GraduationCap size={17} />} active={activeSection} setActive={setActiveSection} action={<AddButton onClick={addEducation} label="Add school" testId="button-add-education" />}><EducationForm items={resume.education} update={updateEducation} remove={(id) => setResume((p) => ({ ...p, education: p.education.filter((item) => item.id !== id) }))} /></EditorSection>
+             <EditorSection id="skills" title="Skills" caption={showWritingPrompts ? 'What you bring to the room' : ''} icon={<Sparkles size={17} />} active={activeSection} setActive={setActiveSection} action={<AddButton onClick={addSkill} label="Add skill" testId="button-add-skill" />}><SkillsForm items={resume.skills} update={updateSkill} remove={(id) => setResume((p) => ({ ...p, skills: p.skills.filter((item) => item.id !== id) }))} /></EditorSection>
+             <EditorSection id="projects" title="Projects" caption={showWritingPrompts ? 'The work that stays with you' : ''} icon={<WandSparkles size={17} />} active={activeSection} setActive={setActiveSection} action={<AddButton onClick={addProject} label="Add project" testId="button-add-project" />}><ProjectsForm items={resume.projects} update={updateProject} remove={(id) => setResume((p) => ({ ...p, projects: p.projects.filter((item) => item.id !== id) }))} /></EditorSection>
           </div>
           <div className="mt-7 flex items-center justify-between sm:hidden"><span className="text-xs text-[hsl(var(--muted-foreground))]">{savedAt ? `Saved ${savedAt}` : 'Changes are saved when you choose Save'}</span><button onClick={save} disabled={saveResume.isPending} className="flex items-center gap-2 rounded-full bg-[hsl(var(--primary))] px-4 py-2.5 text-xs font-bold text-[hsl(var(--primary-foreground))]" data-testid="button-save-resume-mobile"><Save size={14} /> Save</button></div>
         </main>
@@ -576,7 +599,7 @@ function EditorSkeleton() {
 
 function EditorSection({ id, title, caption, icon, active, setActive, action, children }: { id: string; title: string; caption: string; icon: ReactNode; active: string; setActive: (id: string) => void; action?: ReactNode; children: ReactNode }) {
   const isOpen = active === id;
-  return <section className={`overflow-hidden rounded-2xl border bg-[hsl(var(--card))] transition-shadow ${isOpen ? 'border-[hsl(var(--primary)/.28)] shadow-[0_8px_22px_hsl(191_29%_19%/.05)]' : 'border-[hsl(var(--card-border))]'}`}><div className="flex items-center gap-3 px-4 py-4 sm:px-5"><button onClick={() => setActive(isOpen ? '' : id)} className="flex min-w-0 flex-1 items-center gap-3 text-left" data-testid={`button-toggle-section-${id}`}><span className={`grid size-9 shrink-0 place-items-center rounded-xl transition ${isOpen ? 'bg-[hsl(var(--primary))] text-[hsl(var(--primary-foreground))]' : 'bg-[hsl(var(--secondary))] text-[hsl(var(--primary))]'}`}>{icon}</span><span className="min-w-0"><span className="block text-sm font-bold">{title}</span><span className="mt-0.5 block truncate text-xs text-[hsl(var(--muted-foreground))]">{caption}</span></span></button>{action}<button onClick={() => setActive(isOpen ? '' : id)} className="grid size-8 shrink-0 place-items-center rounded-full text-[hsl(var(--muted-foreground))] transition hover:bg-[hsl(var(--secondary))]" data-testid={`button-chevron-section-${id}`}><ChevronDown size={17} className={`transition-transform ${isOpen ? 'rotate-180' : ''}`} /></button></div>{isOpen && <div className="border-t border-[hsl(var(--border))] px-4 pb-5 pt-5 sm:px-5">{children}</div>}</section>;
+  return <section className={`overflow-hidden rounded-2xl border bg-[hsl(var(--card))] transition-shadow ${isOpen ? 'border-[hsl(var(--primary)/.28)] shadow-[0_8px_22px_hsl(191_29%_19%/.05)]' : 'border-[hsl(var(--card-border))]'}`}><div className="flex items-center gap-3 px-4 py-4 sm:px-5"><button onClick={() => setActive(isOpen ? '' : id)} className="flex min-w-0 flex-1 items-center gap-3 text-left" data-testid={`button-toggle-section-${id}`}><span className={`grid size-9 shrink-0 place-items-center rounded-xl transition ${isOpen ? 'bg-[hsl(var(--primary))] text-[hsl(var(--primary-foreground))]' : 'bg-[hsl(var(--secondary))] text-[hsl(var(--primary))]'}`}>{icon}</span><span className="min-w-0"><span className="block text-sm font-bold">{title}</span><span className={`mt-0.5 block truncate text-xs text-[hsl(var(--muted-foreground))] ${caption ? '' : 'sr-only'}`}>{caption || `${title} section`}</span></span></button>{action}<button onClick={() => setActive(isOpen ? '' : id)} className="grid size-8 shrink-0 place-items-center rounded-full text-[hsl(var(--muted-foreground))] transition hover:bg-[hsl(var(--secondary))]" data-testid={`button-chevron-section-${id}`}><ChevronDown size={17} className={`transition-transform ${isOpen ? 'rotate-180' : ''}`} /></button></div>{isOpen && <div className="border-t border-[hsl(var(--border))] px-4 pb-5 pt-5 sm:px-5">{children}</div>}</section>;
 }
 
 function AddButton({ onClick, label, testId }: { onClick: () => void; label: string; testId: string }) {
@@ -645,6 +668,12 @@ function PreviewSection({ title, accent, children }: { title: string; accent: Ac
 function calculateCompletion(resume: ResumeInput) {
   const checks = [resume.basics.name, resume.basics.headline, resume.basics.email, resume.basics.summary, resume.experience.length, resume.education.length, resume.skills.length, resume.projects.length];
   return Math.round((checks.filter(Boolean).length / checks.length) * 100);
+}
+
+function formatSavedDate(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
 }
 
 function Templates({ template, setTemplate, accent, setAccent }: { template: TemplateName; setTemplate: (value: TemplateName) => void; accent: AccentName; setAccent: (value: AccentName) => void }) {
