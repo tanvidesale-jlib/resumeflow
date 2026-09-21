@@ -42,6 +42,7 @@ import {
 import {
   getGetResumeQueryKey,
   getGetResumeSummaryQueryKey,
+  setBaseUrl,
   useGetResume,
   useGetResumeSummary,
   useSaveResume,
@@ -63,7 +64,10 @@ const clerkPubKey = publishableKeyFromHost(
   window.location.hostname,
   import.meta.env.VITE_CLERK_PUBLISHABLE_KEY,
 );
-const clerkProxyUrl = import.meta.env.VITE_CLERK_PROXY_URL;
+const apiUrl = import.meta.env.VITE_API_URL?.replace(/\/+$/, '') || '';
+setBaseUrl(apiUrl || null);
+const clerkProxyUrl =
+  import.meta.env.VITE_CLERK_PROXY_URL || (apiUrl ? `${apiUrl}/api/__clerk` : undefined);
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, '');
 
 function stripBase(path: string) {
